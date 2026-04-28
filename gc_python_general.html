@@ -403,8 +403,8 @@ Generation 2  (oldest, collected least often)</code></pre>
 <p>⚠️ <code>id()</code> only guarantees uniqueness for <strong>currently live</strong> objects.</p>
 </blockquote>
 </section>
-<section id="the-pydyna-bug-setup" class="slide level2">
-<h2>The PyDyna Bug — Setup</h2>
+<section id="the-bug-setup" class="slide level2">
+<h2>The Bug — Setup</h2>
 <p><code>Card.__init__</code> (legacy path) used <code>id(schema)</code> as a <strong>cache key</strong>:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb28"><pre class="sourceCode numberSource python number-lines code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href=""></a><span class="co"># card.py  ← THE </span><span class="al">BUG</span></span>
 <span id="cb28-2"><a href=""></a><span class="kw">class</span> Card:</span>
@@ -418,8 +418,8 @@ Generation 2  (oldest, collected least often)</code></pre>
 <span id="cb29-3"><a href=""></a></span>
 <span id="cb29-4"><a href=""></a><span class="co"># lookup:  (id_of_schema, format_type) → FormatSpec</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
-<section id="the-pydyna-bug-collision" class="slide level2">
-<h2>The PyDyna Bug — Collision</h2>
+<section id="the-bug-collision" class="slide level2">
+<h2>The Bug — Collision</h2>
 <pre><code>Test 1: test_load_card_errors
   ┌─ Card(foo:int, bar:int)
   ├─ CardSchema at address 0x10500
@@ -440,14 +440,9 @@ Test 2: test_load_card_parameters
 <h2>References</h2>
 <ul>
 <li><a href="https://docs.python.org/3/library/gc.html">Python <code>gc</code> module docs</a></li>
-<li><a href="https://docs.python.org/3/library/weakref.html">Python <code>weakref</code> module docs</a></li>
-<li><a href="https://docs.python.org/3.12/whatsnew/3.12.html#gc">Python 3.12 What’s New — Incremental GC</a></li>
-<li><a href="https://docs.python.org/3.13/whatsnew/3.13.html">Python 3.13 What’s New — Incremental GC default</a></li>
+<li><a href="https://docs.python.org/3.14/whatsnew/3.14.html#incremental-garbage-collection">Python 3.14 What’s New — Incremental GC</a></li>
 <li><a href="https://docs.python.org/3/library/functions.html#id">CPython <code>id()</code> docs</a></li>
-<li>Demo script: <code>scripts/demo_gc_id_reuse.py</code></li>
 </ul>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb31"><pre class="sourceCode numberSource bash number-lines code-with-copy"><code class="sourceCode bash"><span id="cb31-1"><a href=""></a><span class="co"># Re-render this presentation</span></span>
-<span id="cb31-2"><a href=""></a><span class="ex">quarto</span> render scripts/gc_python_general.qmd <span class="at">--to</span> pptx</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 
 </section>
     </div>

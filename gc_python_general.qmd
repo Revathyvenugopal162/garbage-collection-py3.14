@@ -482,19 +482,9 @@ Test 2: test_load_card_parameters
   → IndexError: tuple index out of range!
 ```
 
-
-
-
 ## References
 
 - [Python `gc` module docs](https://docs.python.org/3/library/gc.html)
-- [Python `weakref` module docs](https://docs.python.org/3/library/weakref.html)
-- [Python 3.12 What's New — Incremental GC](https://docs.python.org/3.12/whatsnew/3.12.html#gc)
-- [Python 3.13 What's New — Incremental GC default](https://docs.python.org/3.13/whatsnew/3.13.html)
+- [Python 3.14 What's New — Incremental GC](https://docs.python.org/3.14/whatsnew/3.14.html#incremental-garbage-collection)
 - [CPython `id()` docs](https://docs.python.org/3/library/functions.html#id)
-- Demo script: `scripts/demo_gc_id_reuse.py`
 
-```bash
-# Re-render this presentation
-quarto render scripts/gc_python_general.qmd --to pptx
-```
