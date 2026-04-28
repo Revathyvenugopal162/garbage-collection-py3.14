@@ -1,0 +1,500 @@
+---
+title: "Python Garbage Collection"
+subtitle: "How Python manages memory — and what changed in 3.14"
+author: "Revathy Venugopal"
+format: 
+    revealjs
+---
+
+## What is Garbage Collection?
+
+> **Garbage Collection (GC)** is automatic memory management.
+> It finds and frees memory from objects your program no longer needs.
+
+**Without GC:**
+
+```python
+data = load_big_file()
+# ... use data ...
+# Developer must manually free memory — easy to forget, causes crashes
+```
+
+---
+
+**With GC (Python):**
+
+```python
+data = load_big_file()
+# ... use data ...
+# Python detects data is unused → frees it automatically ✅
+```
+
+GC lets you focus on logic, not memory bookkeeping.
+
+---
+
+## How Python Manages Memory
+
+Python uses **two mechanisms** together:
+
+```
+┌─────────────────────────────────────────────┐
+│              Python Memory Model            │
+│                                             │
+│   Layer 1: Reference Counting  (fast)       │
+│   Layer 2: Cyclic GC           (periodic)   │
+└─────────────────────────────────────────────┘
+```
+
+- **Layer 1** handles ~90% of objects — immediately when count hits 0
+- **Layer 2** handles the remaining ~10% — objects in cycles
+
+---
+
+## Layer 1 — Reference Counting
+
+Every object tracks: *"How many variables point at me?"*
+
+```python
+x = [1, 2, 3]     # list ref count = 1
+y = x              # list ref count = 2
+del x              # list ref count = 1
+del y              # list ref count = 0 → freed immediately!
+```
+
+```
+ x ──┐
+      ├──► [1, 2, 3]   count = 2
+ y ──┘
+ 
+ del x, y  →  count = 0  →  freed instantly
+```
+
+::: {.incremental}
+
+- ✅ **Pros:** Fast, deterministic, no pause  
+- ❌ **Con:** Cannot handle circular references
+
+:::
+---
+
+## The Cycle Problem
+
+Reference counting fails when objects point to each other:
+
+```{.python code-line-numbers="|6|7|9"}
+a = Node()
+b = Node()
+a.child = b    # b's count = 1
+b.parent = a   # a's count = 1
+
+del a          # a's count: 2→1  (b still holds it)
+del b          # b's count: 2→1  (a still holds it)
+
+# Neither reaches 0 → MEMORY LEAK without cyclic GC!
+```
+
+```
+  a ──► Node_A ◄──┐
+        │         │
+        └──► Node_B
+```
+
+Even though `a` and `b` are deleted, the objects keep each other alive.
+
+---
+
+## Layer 2 — Cyclic Garbage Collector
+
+The **cyclic GC** scans the heap to find these unreachable cycles:
+
+```
+1. Find all objects with ref count > 0
+2. Subtract internal references (within the group)
+3. If adjusted count = 0 → unreachable → FREE IT
+```
+
+```python
+import gc
+
+# Manual trigger
+gc.collect()
+
+# Check GC stats
+print(gc.get_count())      # (gen0, gen1, gen2) object counts
+print(gc.get_threshold())  # thresholds to trigger each generation
+```
+
+---
+
+## Generational GC — Three Generations
+
+Python uses **3 generations** based on object age:
+
+```
+Generation 0  (youngest, collected most often)
+  │  objects that survive → promoted to
+  ▼
+Generation 1  (medium age)
+  │  objects that survive → promoted to
+  ▼
+Generation 2  (oldest, collected least often)
+```
+
+```python
+gc.get_threshold()
+# (700, 10, 10)
+# Gen0 collected every 700 new allocations
+# Gen1 collected every 10 Gen0 collections
+# Gen2 collected every 10 Gen1 collections
+```
+
+**Idea:** Most objects die young — scan young objects more often.
+
+---
+
+## GC Generations — Visual
+
+```
+New objects ──► Gen 0  ──survive──► Gen 1  ──survive──► Gen 2
+                  │                   │                   │
+               collected            collected           collected
+               often                less often          rarely
+               (cheap)              (medium)            (expensive)
+```
+
+```python
+import gc
+
+# Force collection of all generations
+gc.collect(0)   # gen 0 only
+gc.collect(1)   # gen 0 + gen 1
+gc.collect(2)   # all generations (full)
+gc.collect()    # same as gc.collect(2)
+```
+
+---
+
+## What Changed in Python 3.14+
+
+| Version | GC Mode | When it fires |
+|---------|---------|---------------|
+| ≤ 3.13 | **Stop-the-world** | Occasionally, in bursts |
+| **3.14+** | **Incremental GC (default)** | Continuously, between calls |
+
+**Stop-the-world GC (old):**
+```
+Code runs ─────────────────────► [PAUSE: full GC scan] ─► Code resumes
+```
+
+**Incremental GC (3.14+):**
+```
+Code runs ─► [tiny GC step] ─► Code runs ─► [tiny GC step] ─► Code runs
+```
+
+Objects are now freed **much sooner** — sometimes between consecutive lines.
+
+---
+
+## Controlling the GC {visibility="hidden"}
+
+```python
+import gc
+
+# Disable automatic GC (manual control)
+gc.disable()
+
+# Re-enable
+gc.enable()
+
+# Tune thresholds (Gen0, Gen1, Gen2)
+gc.set_threshold(1000, 15, 15)
+
+# Force a collection
+gc.collect()
+
+# Get current generation counts
+gen0, gen1, gen2 = gc.get_count()
+
+# Get objects in generation N (useful for debugging leaks)
+objects = gc.get_objects(generation=0)
+```
+
+---
+
+## Detecting Memory Leaks with GC {visibility="hidden"}
+
+```python
+import gc
+import tracemalloc
+
+# Find objects that are not being collected
+gc.set_debug(gc.DEBUG_LEAK)
+gc.collect()
+
+# Or use tracemalloc for detailed memory tracking
+tracemalloc.start()
+
+# ... run your code ...
+
+snapshot = tracemalloc.take_snapshot()
+top = snapshot.statistics("lineno")
+for stat in top[:5]:
+    print(stat)
+```
+
+```
+# Example output:
+test.py:12: size=1.2 KiB, count=15, average=82 B
+test.py:8:  size=800 B,   count=10, average=80 B
+```
+
+---
+
+## Common GC Pitfalls {visibility="hidden"}
+
+### 1. Using `id()` as a long-lived cache key
+
+```python
+# ❌ WRONG — id reused after GC frees the object
+cache = {}
+cache[id(obj)] = compute_something(obj)
+del obj          # obj freed, id available for reuse
+new_obj = Other()
+id(new_obj) == id(obj)  # True! stale cache hit!
+
+# ✅ CORRECT — use content-based key
+cache[obj.name, obj.type] = compute_something(obj)
+```
+
+### 2. Holding unexpected references
+
+```python
+# ❌ This keeps ALL objects alive (traceback holds locals)
+try:
+    risky()
+except Exception as e:
+    log(e)
+    # 'e' holds a traceback → keeps entire call stack alive!
+
+# ✅ Clear it
+except Exception as e:
+    log(e)
+    e = None   # release traceback
+```
+
+---
+
+## Common GC Pitfalls (cont.) {visibility="hidden"}
+
+### 3. `__del__` methods block GC
+
+```python
+# ❌ Objects with __del__ in a cycle = uncollectable!
+class Resource:
+    def __del__(self):
+        cleanup()   # GC can't collect cycles with __del__ (Python < 3.4)
+
+# ✅ Use context managers instead
+class Resource:
+    def __enter__(self): return self
+    def __exit__(self, *args): self.cleanup()
+
+with Resource() as r:
+    use(r)
+```
+
+### 4. Global variables hold references
+
+```python
+# ❌ Global list keeps all appended objects alive forever
+_registry = []
+def register(obj):
+    _registry.append(obj)   # never freed!
+
+# ✅ Use weakrefs for registries
+import weakref
+_registry = weakref.WeakSet()
+```
+
+---
+
+## `weakref` — References That Don't Prevent GC {visibility="hidden"}
+
+A **weak reference** lets you hold a reference to an object without
+preventing it from being garbage collected:
+
+```python
+import weakref
+
+class Cache:
+    pass
+
+obj = Cache()
+weak = weakref.ref(obj)   # weak reference — doesn't add to ref count
+
+print(weak())   # Cache object (alive)
+
+del obj         # ref count → 0 → freed immediately
+gc.collect()
+
+print(weak())   # None — GC collected it ✅
+```
+
+**Use cases:** caches, observer patterns, registries, memoization
+
+---
+
+## `gc` Module — Quick Reference
+
+```python
+import gc
+
+gc.enable()                    # enable automatic GC
+gc.disable()                   # disable automatic GC
+gc.isenabled()                 # True/False
+
+gc.collect(generation=2)       # run GC for generation 0,1,2
+gc.get_count()                 # (n0, n1, n2) — objects per generation
+gc.get_threshold()             # (t0, t1, t2) — collection thresholds
+gc.set_threshold(700, 10, 10)  # tune thresholds
+
+gc.get_objects()               # all tracked objects
+gc.get_referrers(obj)          # what holds a reference to obj
+gc.get_referents(obj)          # what obj holds references to
+
+gc.is_tracked(obj)             # True if GC tracks this object
+gc.freeze()                    # move all objects to gen2, skip in GC
+gc.get_freeze_count()          # how many frozen objects
+```
+
+---
+
+## Live Demo — `demo_gc_id_reuse.py` {visibility="hidden"}
+
+```bash
+# Run on Python 3.13
+python3.13 scripts/demo_gc_id_reuse.py
+
+# Run on Python 3.14
+python3.14 scripts/demo_gc_id_reuse.py
+
+# Compare both side by side
+for ver in 3.13 3.14; do
+    echo "=== Python $ver ==="
+    python$ver scripts/demo_gc_id_reuse.py | grep -E "⚠|✓|reuse across"
+    echo
+done
+```
+
+The demo shows:
+- **Part 1:** Address reuse with NamedTuple objects (mirrors real objects)
+- **Part 2:** Cache stale-hit simulation across 100 iterations
+- **Part 3:** Content-based key — zero collisions by design
+- **Part 4:** GC mode detection for current Python version
+
+---
+
+## Key Takeaways {visibility="hidden"}
+
+::: {.incremental}
+
+1. **Python GC = Reference Counting + Cyclic GC working together**
+
+2. **Reference counting** is fast and immediate — handles most objects
+
+3. **Cyclic GC** handles circular references — runs periodically (or continuously in 3.13+)
+
+4. **Python 3.13+ incremental GC** collects objects between every function call — objects die faster than ever before
+
+5. **Never use `id(obj)` as a persistent cache key** — the address is reused after GC
+
+6. **Use `weakref`** for caches and registries that should not prevent GC
+
+7. **Use content-based keys** (tuples of attributes) for long-lived caches
+
+:::
+
+---
+
+## The `id()` Function
+
+```python
+id(obj)   # Returns the memory address of an object
+```
+
+- Every object lives at a unique memory address
+- When an object is **freed**, its address is **recycled**
+- A new object can land at the **exact same address**
+
+```python
+a = SomeObject("schema-A")
+addr = id(a)          # e.g. 0x10500
+
+del a                 # freed — address 0x10500 is now available
+
+b = SomeObject("schema-B")
+id(b) == addr         # True! Python reused 0x10500 for b
+```
+
+> ⚠️  `id()` only guarantees uniqueness for **currently live** objects.
+
+---
+
+## The Bug — Setup
+
+`Card.__init__` (legacy path) used `id(schema)` as a **cache key**:
+
+```python
+# card.py  ← THE BUG
+class Card:
+    def __init__(self, fields):
+        ...
+        self._schema = CardSchema(field_schemas, name_to_index)
+        self._signature = id(self._schema)   # ← UNSAFE!
+```
+The module-level cache stored `FormatSpec` keyed by this id:
+
+```python
+# module-level — lives for the entire test session
+_format_spec_cache: Dict[Tuple, FormatSpec] = {}
+
+# lookup:  (id_of_schema, format_type) → FormatSpec
+```
+
+## The Bug — Collision
+
+```
+Test 1: test_load_card_errors
+  ┌─ Card(foo:int, bar:int)
+  ├─ CardSchema at address 0x10500
+  └─ _format_spec_cache[(0x10500, default)] = FormatSpec(int@0, int@10)
+  
+  End of test → Card + schema GC'd → address 0x10500 freed
+  
+Test 2: test_load_card_parameters
+  ┌─ Card(a:float … h:float)   ← 8 fields, completely different!
+  ├─ NEW CardSchema lands at address 0x10500  ← same address reused!
+  └─ _format_spec_cache[(0x10500, default)] = HIT → FormatSpec(int@0, int@10)
+  
+  Parses 8-float line using a 2-int FormatSpec
+  → load_dataline returns 2 values, schema expects 8
+  → IndexError: tuple index out of range!
+```
+
+
+
+
+## References
+
+- [Python `gc` module docs](https://docs.python.org/3/library/gc.html)
+- [Python `weakref` module docs](https://docs.python.org/3/library/weakref.html)
+- [Python 3.12 What's New — Incremental GC](https://docs.python.org/3.12/whatsnew/3.12.html#gc)
+- [Python 3.13 What's New — Incremental GC default](https://docs.python.org/3.13/whatsnew/3.13.html)
+- [CPython `id()` docs](https://docs.python.org/3/library/functions.html#id)
+- Demo script: `scripts/demo_gc_id_reuse.py`
+
+```bash
+# Re-render this presentation
+quarto render scripts/gc_python_general.qmd --to pptx
+```
