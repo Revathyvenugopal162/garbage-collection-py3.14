@@ -1,0 +1,64 @@
+---
+title: "Python remote execution"
+subtitle: "How to execute Python code remotely"
+author: "Revathy Venugopal"
+format: 
+    revealjs
+---
+
+## What is sys.remote_exec()?
+sys.remote_exec(pid, script_path) tells a running Python process to load and execute a Python script file. The target process continues running and executes the injected script when it reaches a safe execution point.
+
+```{python}
+import sys
+sys.remote_exec(pid, script_path)
+```
+- `pid`: The process ID of the target Python process.
+- `script_path`: The path to the Python script file to be executed remotely.
+
+## real examples
+counter.py
+```{python}
+import os
+import time
+
+counter = 0
+
+print(f"PID={os.getpid()}")
+
+while True:
+    counter += 1
+    print(f"counter={counter}")
+    time.sleep(5)
+``` 
+inpection.py
+```{python}
+import __main__
+
+print("\n=== REMOTE EXEC WORKED ===")
+print("counter value =", __main__.counter)
+print("==========================\n")
+```
+
+## pdb with remote_exec
+The pdb module now supports remote attaching to a running Python process using a new -p PID command-line option:
+
+Before Python 3.14, you typically had to add:
+```
+import pdb; pdb.set_trace()
+```
+
+
+```{python}
+python -m pdb -p 1234
+```
+
+### some useful commands in pdb
+- `c`: Continue execution until the next breakpoint.
+- `l`: List source code for the current file.
+- `s`: Step into a function call.
+- `up`: Move up the stack trace.
+- `down`: Move down the stack trace.
+- `where`: Show the current stack trace.
+- `p <expression>`: Print the value of an expression.
+- `q`: Quit the debugger and exit the program.
